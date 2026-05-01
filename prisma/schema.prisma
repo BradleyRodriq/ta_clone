@@ -1,0 +1,146 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  CUSTOMER
+  OWNER
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+}
+
+model User {
+  id                   String    @id @default(cuid())
+  email                String    @unique
+  passwordHash         String
+  name                 String
+  phone                String?
+  role                 UserRole  @default(CUSTOMER)
+  insuranceConfirmed   Boolean   @default(false)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  boats                Boat[]
+  bookings             Booking[]
+  reviews              Review[]
+  favorites            Favorite[]
+  messagesSent         Message[] @relation("MessageSender")
+  messagesReceived     Message[] @relation("MessageRecipient")
+}
+
+model Boat {
+  id            String    @id @default(cuid())
+  title         String
+  description   String
+  pricePerHour  Decimal   @db.Decimal(10, 2)
+  pricePerDay   Decimal   @db.Decimal(10, 2)
+  city          String
+  latitude      Float
+  longitude     Float
+  capacity      Int
+  amenities     String[]
+  images        String[]
+  boatType      String
+  ownerId       String
+  owner         User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  bookings      Booking[]
+  reviews       Review[]
+  favorites     Favorite[]
+  messages      Message[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([city])
+  @@index([boatType])
+  @@index([ownerId])
+}
+
+model Booking {
+  id          String        @id @default(cuid())
+  userId      String
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  boatId      String
+  boat        Boat          @relation(fields: [boatId], references: [id], onDelete: Cascade)
+  startDate   DateTime
+  endDate     DateTime
+  guestCount  Int           @default(1)
+  pricingMode String
+  totalPrice  Decimal       @db.Decimal(10, 2)
+  status      BookingStatus @default(PENDING)
+  payment     Payment?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([boatId, startDate, endDate])
+  @@index([userId])
+}
+
+model Payment {
+  id                      String        @id @default(cuid())
+  bookingId               String        @unique
+  booking                 Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  stripeCheckoutSessionId String?       @unique
+  stripePaymentIntentId   String?
+  amountSubtotal          Decimal       @db.Decimal(10, 2)
+  serviceFeeAmount        Decimal       @db.Decimal(10, 2)
+  ownerAmount             Decimal       @db.Decimal(10, 2)
+  currency                String        @default("usd")
+  status                  PaymentStatus @default(PENDING)
+  createdAt               DateTime      @default(now())
+  updatedAt               DateTime      @updatedAt
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  rating    Int
+  comment   String
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  boatId    String
+  boat      Boat     @relation(fields: [boatId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, boatId])
+}
+
+model Favorite {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  boatId    String
+  boat      Boat     @relation(fields: [boatId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, boatId])
+}
+
+model Message {
+  id          String    @id @default(cuid())
+  boatId      String?
+  boat        Boat?     @relation(fields: [boatId], references: [id], onDelete: SetNull)
+  senderId    String
+  sender      User      @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  recipientId String
+  recipient   User      @relation("MessageRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  body        String
+  readAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([senderId, recipientId])
+  @@index([boatId])
+}
